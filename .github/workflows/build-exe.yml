@@ -1,0 +1,33 @@
+name: build-exe
+
+# Construieste .exe-ul pentru Windows direct pe GitHub (de pe macOS/Linux).
+# Rulare: tab-ul Actions -> build-exe -> Run workflow -> descarci artefactul.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - app.py
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instaleaza PyInstaller
+        run: pip install --upgrade pyinstaller
+
+      - name: Construieste executabilul
+        run: pyinstaller --onefile --noconsole --name Trimitere_Emailuri app.py
+
+      - name: Incarca executabilul (il descarci de aici)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Trimitere_Emailuri.exe
+          path: dist/Trimitere_Emailuri.exe
+          if-no-files-found: error

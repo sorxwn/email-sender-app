@@ -1,0 +1,8 @@
+.venv-web/
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+setari.json
+*.exe
+dist/
+build/

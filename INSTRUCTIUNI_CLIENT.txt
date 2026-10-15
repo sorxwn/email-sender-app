@@ -1,0 +1,90 @@
+========================================================
+  GHID PENTRU CLIENT - Trimitere Emailuri Automatizate
+========================================================
+
+CE PRIMESTI (pune toate fisierele in acelasi folder):
+  1. Trimitere_Emailuri.exe   -> aplicatia (dublu-click ca sa o deschizi)
+  2. cv_emails_Sheet1.csv     -> lista cu contactele
+  3. INSTRUCTIUNI_CLIENT.txt  -> acest ghid
+
+
+CUM DESCHIZI APLICATIA
+----------------------
+Dublu-click pe "Trimitere_Emailuri.exe".
+Prima data Windows poate afisa "Windows a protejat calculatorul" ->
+apasă "Mai multe informatii" -> "Rulare oricum". E normal: fisierul nu
+e cumparat de la Microsoft, dar este sigur.
+
+
+PASII DIN APLICATIE
+-------------------
+1.  Apasa "Alege fisierul CSV" si selecteaza cv_emails_Sheet1.csv.
+2.  "Email expeditor" -> adresa ta (ex: nume@gmail.com).
+3.  "Parola aplicatie" -> NU este parola normala a contului!
+     Vezi instructiunile de mai jos "CUM FACI PAROLA DE APLICATIE".
+4.  Apasa butonul "Auto SMTP" -> serverul SMTP se completeaza singur.
+     Apoi (optional) "Testeaza conexiunea" -> iti spune daca e totul OK.
+5.  Scrie Subiectul si Mesajul. Poti folosi variabile:
+        {{Companie}}  {{Persoana_contact}}  {{Oras}}  {{Website}}  {{Telefon}}
+     Acestea se inlocuiesc automat cu datele fiecarui contact, asa ca
+     fiecare primeste un mesaj personalizat.
+6.  "Cate emailuri trimiti acum" -> ex: 50
+     "Pauza intre emailuri" -> recomandat 10-20 secunde
+7.  Apasa  "PORNESTE TRIMITEREA".
+
+Poti apasa  "OPRESTE"  oricand:
+  - ce s-a trimis deja NU se mai trimite la o rulare viitoare
+  - poti relua oricand -> repornesti si se continua de unde ai ramas
+  - vrei sa retrimite TOT -> butonul "Sterge progresul" (confirma da)
+
+Setarile (email, subiect, mesaj, pauza) se salveaza automat la
+inchidere - data viitoare deschizi aplicatia si sunt deja acolo.
+In fereastra "Jurnal" vezi exact ce s-a intamplat, cu ora.
+
+
+CUM FACI "PAROLA DE APLICATIE" (App Password)
+----------------------------------------------
+Aplicatia nu accepta parola normala a contului. Intai pornesti
+Verificarea in doi pasi, apoi creezi o "parola pentru aplicatii".
+
+GMAIL:
+  1. https://myaccount.google.com/security
+  2. "Verificarea in doi pasi" -> porneste-o (daca nu e deja)
+  3. Cauta "Parole pentru aplicatii" -> "Creati o parola"
+  4. Copiaza cele 16 caractere si lipeste-o in aplicatie (fara spatii)
+
+OUTLOOK / HOTMAIL:
+  1. https://account.microsoft.com/security
+  2. "Parola de aplicatie" -> "Creeaza o parola de aplicatie noua"
+
+YAHOO:
+  1. https://login.yahoo.com/account/security
+  2. "Gestioneaza parolele aplicatiilor" -> "Creeaza"
+
+
+RECOMANDARI (ca sa nu iti fie blocat contul)
+--------------------------------------------
+- Pauza minima recomandata: 10-20 secunde intre emailuri.
+- Gmail (cont obisnuit): max ~500 emailuri/zi -> trimite in transe
+  de 50-100, cu pauza.
+- Yahoo: max ~100 emailuri/ora.
+- Daca in jurnal vezi "serverul cere o pauza", aplicatia asteapta
+  singura si reincearca - nu trebuie sa faci nimic.
+- Eroarea la un singur destinatar (cutie inexistenta) NU opreste
+  trimiterea; restul merg mai departe.
+
+
+TROUBLESHOOTING
+---------------
+"Autentificare esuata"      -> refa o Parola de aplicatie (vezi mai sus).
+"Nu ma pot conecta la       -> verifica internetul si apasa butonul
+ server"                       "Auto SMTP" ca sa se completeze singur.
+Emailurile par trimise       -> e bifat "Sari peste cele deja
+ de doua ori                   trimise"; daca vrei retrimite, apasa
+                               "Sterge progresul".
+Nu stii ce s-a intamplat    -> citeste fereastra "Jurnal" sau butonul
+                               "GHID" din aplicatie.
+
+ATENTIE: nu trimite setari.json altor persoane - daca ai bifat
+"Retine parola", parola ta de aplicatie e salvata in el, doar pe
+calculatorul tau.
