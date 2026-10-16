@@ -29,7 +29,8 @@ HEARTBEAT_TIMEOUT = 60
 class SendRun:
     """O rulare de trimitere: tinte din Sheet + SMTP + stergere dupa succes."""
 
-    def __init__(self, session, sheet, targets, sender_email, subject, body, delay=10):
+    def __init__(self, session, sheet, targets, sender_email, subject, body, delay=10,
+                 attachments=None):
         self.session = session          # email_core.SmtpSession
         self.sheet = sheet              # sheet_io.SheetModel
         self.targets = targets          # lista rezolvata la pornire
@@ -37,6 +38,9 @@ class SendRun:
         self.subject = subject
         self.body = body
         self.delay = max(0, int(delay))
+        # lista de (nume_fisier, bytes) - atasate la FIECARE email trimis
+        self.attachments = [(a[0], bytes(a[1])) for a in (attachments or [])
+                            if a and a[0] and a[1] is not None]
 
         self.total = len(targets)
         self.done = 0                   # incercari -> progres
@@ -122,6 +126,7 @@ class SendRun:
                     self.sender_email, recipient,
                     render_template(self.subject, lookup),
                     render_template(self.body, lookup),
+                    attachments=self.attachments,
                 )
                 ok, err, code = self.session.send(msg)
                 if not ok and code in TRANSIENT_CODES and not self._should_stop():

@@ -40,10 +40,35 @@ ss_default("smtp_host", "smtp.gmail.com")
 ss_default("smtp_port", 587)
 ss_default("sender_email", "")
 ss_default("sender_pass", "")
-ss_default("subject", "")
-ss_default("body", "")
+EDUARD_SUBJECT = "Application – Ordinary Seaman / Deckhand – {{Companie_Titlu}}"
+
+EDUARD_BODY = """Dear {{Prenume}},
+
+My name is Eduard Lae, I am 39 years old and I am looking for an opportunity to work as an Ordinary Seaman / Deckhand on a fishing vessel in Norway.
+
+I have STCW Basic Safety Training and a valid Norwegian Maritime Medical Certificate (FIT FOR WORK). I am physically fit, disciplined and accustomed to shift work, night work and demanding working conditions.
+
+I have 13 years of experience as a Corrections Officer, as well as experience in construction and delivery work in Germany. I am highly motivated to learn, work hard and build a long-term career at sea.
+
+I am available to join a vessel and work rotational schedules.
+
+Please find my CV attached. I would be grateful if you could consider my application for any suitable position on board your fishing vessels.
+
+Thank you for your time and consideration.
+
+Kind regards,
+
+Eduard Lae
+Bălți, Moldova
+Phone: +373 69 893 661
+Email: lae.eduard333@gmail.com"""
+
+ss_default("subject", EDUARD_SUBJECT)
+ss_default("body", EDUARD_BODY)
 ss_default("limit", 30)
 ss_default("delay", 10)
+ss_default("cv_bytes", None)         # bytes CV incarcat (ramane in sesiune intre rulari)
+ss_default("cv_name", "")            # numele fisierului CV
 ss_default("auto_smtp_msg", "")
 ss_default("dry_run", True)          # siguranta: intai previzualizare, apoi trimitere
 ss_default("secrets_tried", False)   # auto-conectare din st.secrets o singura data
@@ -308,10 +333,23 @@ with st.expander("🧩 Cum faci „Parola de aplicație” (App Password) – Gm
 
 # ============================================================ mesaj =========
 st.subheader("3. Mesaj și setări de trimitere")
-st.text_input("Subiect", key="subject", placeholder="Ex: O colaborare pentru {{Companie}}")
-st.text_area("Corp mesaj – variabile: {{Companie}}, {{Persoana_contact}} (și orice altă coloană din tabel)",
+st.text_input("Subiect", key="subject", placeholder="Ex: Application – Ordinary Seaman – {{Companie_Titlu}}")
+st.text_area("Corp mesaj – variabile: {{Prenume}}, {{Persoana_contact}}, {{Companie}}, {{Companie_Titlu}}, {{Nume}}, {{Oras}} (orice coloană din tabel)",
              key="body", height=200,
-             placeholder="Bună ziua {{Persoana_contact}},\n\n\nCu stimă,\nEchipa noastră")
+             placeholder="Dear {{Prenume}},\n\nMy name is ...")
+with st.expander("📋 Vezi toate variabilele disponibile (ce pui în subiect/mesaj)"):
+    st.markdown(
+        "| Variabila | Ce primește destinatarul (exemplu) |\n"
+        "|---|---| \n"
+        "| `{{Prenume}}` | prenumele: **Arild** (din „Arild Jensen”) |\n"
+        "| `{{Nume}}` | numele de familie: **Jensen** |\n"
+        "| `{{Persoana_contact}}` | numele complet: **Arild Jensen** (sau *Sir/Madam* dacă lipsește) |\n"
+        "| `{{Companie}}` | compania exact ca în tabel: `a. jensen as` |\n"
+        "| `{{Companie_Titlu}}` | compania cu majuscule frumoase: **A. Jensen AS** |\n"
+        "| `{{Oras}}` / `{{Telefon}}` / `{{Website}}` | orice altă coloană din tabel |\n"
+        "\n**Sfat:** în subiect NU folosi `{{Persoana_contact}}` (nume complet) – "
+        "folosește `{{Prenume}}` sau `{{Companie_Titlu}}`, arată mai natural."
+    )
 
 mc1, mc2, mc3 = st.columns([2, 2, 3])
 with mc1:
@@ -323,6 +361,32 @@ with mc2:
 with mc3:
     st.caption("Recomandare: pauză 10–20 secunde. Gmail (cont obișnuit): max ~500 emailuri/zi – "
                "trimite în transe de 50–100 ca să nu fie blocat contul.")
+
+# ============================================================ atasament ====
+st.subheader("📎 Fișier atașat (CV)")
+cv = st.file_uploader("Încarcă CV-ul (PDF recomandat – se atașează la FIECARE email)",
+                      type=["pdf", "doc", "docx", "odt", "rtf", "txt", "jpg", "jpeg", "png"],
+                      key="cv_file")
+if cv is not None:
+    st.session_state.cv_bytes = cv.getvalue()
+    st.session_state.cv_name = cv.name
+    kb = len(st.session_state.cv_bytes) / 1024
+    st.success("📎 Atașat: **{}** ({:.0f} KB) – va pleca cu fiecare email trimis."
+               .format(st.session_state.cv_name, kb))
+    if len(st.session_state.cv_bytes) > 10 * 1024 * 1024:
+        st.warning("Fișierul e mare (>10 MB) – unele servere îl pot refuza. "
+                   "Recomandat: PDF sub 2 MB.")
+elif st.session_state.get("cv_bytes"):
+    kb = len(st.session_state.cv_bytes) / 1024
+    st.info("📎 CV încărcat: **{}** ({:.0f} KB). Ca să-l schimbi, încarcă alt fișier mai sus."
+            .format(st.session_state.get("cv_name", "?"), kb))
+    if st.button("🗑 Scoate atașamentul", key="cv_remove"):
+        st.session_state.cv_bytes = None
+        st.session_state.cv_name = ""
+        st.rerun()
+else:
+    st.caption("Fără atașament momentan – emailurile pleacă doar cu text. "
+               "Încarcă CV-ul ca PDF pentru cele mai bune rezultate.")
 
 # ============================================================ trimitere =====
 st.subheader("4. Testare fără trimitere (Dry-Run) și Trimitere")
@@ -343,6 +407,10 @@ if model is not None and model.summary()["email_column"]:
             st.error("Completează măcar Subiectul sau Corpul mesajului ca să ai ce previzualiza.")
         else:
             from email_core import build_lookup as _lookup, render_template as _render
+            _att = ("📎 Atașament: **{}**".format(st.session_state.cv_name)
+                    if st.session_state.get("cv_bytes") and st.session_state.get("cv_name")
+                    else "⚠️ Fără atașament – emailul pleacă doar cu text.")
+            st.caption(_att)
             for i, t in enumerate(model.targets(int(n_preview)), start=1):
                 lk = _lookup(t["data"])
                 st.markdown("**{}. Către:** `{}`".format(i, t["recipient"]))
@@ -389,11 +457,15 @@ if btn_start:
                 (st.session_state.sender_email or "").strip(),
                 st.session_state.sender_pass,
             )
+            atts = []
+            if st.session_state.get("cv_bytes") and st.session_state.get("cv_name"):
+                atts = [(st.session_state.cv_name, st.session_state.cv_bytes)]
             run = SendRun(
                 session, model, targets,
                 (st.session_state.sender_email or "").strip(),
                 st.session_state.subject, st.session_state.body,
                 delay=int(st.session_state.delay),
+                attachments=atts,
             )
             st.session_state.run = run
             run.start()

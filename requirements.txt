@@ -3,7 +3,8 @@
 # Python-ul de pe python.org (Windows) include deja totul.
 
 # Aplicatia WEB (web_app.py) + build-ul .exe:
-streamlit>=1.66        # interfata web
-gspread>=6.2           # conectare la Google Sheet (citire + stergere)
-pyinstaller>=6.0       # doar pentru construirea executabilului desktop
+streamlit>=1.66         # interfata web (necesar >=1.49 pentru parametrul width="stretch")
+gspread>=6.2            # conectare la Google Sheet (citire + stergere)
+google-auth>=2.0        # autentificare Service Account Google (obligatoriu pe Streamlit Cloud)
+pyinstaller>=6.0        # doar pentru construirea executabilului desktop
 

@@ -9,18 +9,19 @@ fără server, fără VPS, fără hosting.
 | Fișier | Rol |
 |---|---|
 | `app.py` | Aplicația **desktop** (sursa, Tkinter) |
-| `web_app.py` | Aplicația **web** (Streamlit, 100% română, Google Sheet live) |
-| `email_core.py` | Logica comună de email (SMTP, template, CSV) – folosită de AMBELE variante |
+| `web_app.py` | Aplicația **web** (Streamlit, 100% română, Google Sheet live, atașament CV) |
+| `email_core.py` | Logica comună de email (SMTP, template, CSV, atașamente) – folosită de AMBELE variante |
 | `sheet_io.py` | Conectare la Google Sheet + ștergerea sigură a rândurilor |
-| `sender_worker.py` | Thread-ul de trimitere pentru web (progres, log, stop, ștergere) |
+| `sender_worker.py` | Thread-ul de trimitere pentru web (progres, log, stop, ștergere, atașamente) |
 | `porneste_web.sh` / `porneste_web.bat` | Dublu-click → pornește aplicația web |
 | `build.bat` | Construiește `Trimitere_Emailuri.exe` (rulezi pe Windows) |
 | `.github/workflows/build-exe.yml` | Build .exe automat pe GitHub (de pe macOS) |
 | `cv_emails_Sheet1.csv` | Lista de contacte (628 rânduri, coloanele din Google Sheet) |
 | `INSTRUCTIUNI_CLIENT.txt` | Ghidul pe care i-l predai clientului |
 | `test_app.py` | Teste desktop (45) – SMTP falsat, nu trimit emailuri reale |
-| `test_web.py` | Teste web (52) – Sheet falsat, SMTP falsat, Streamlit AppTest |
-| `requirements.txt` | Dependente: `streamlit`, `gspread` (web) + `pyinstaller` (build) |
+| `test_web.py` | Teste web (77) – Sheet falsat, SMTP falsat, atașamente, Streamlit AppTest |
+| `requirements.txt` | Dependente: `streamlit`, `gspread`, `google-auth` (web) + `pyinstaller` (build) |
+| `.streamlit/secrets.toml.example` | Model pentru cheia Service Account (NU conține chei reale) |
 
 ## Aplicația WEB (Streamlit + Google Sheet)
 
@@ -41,8 +42,10 @@ Ce face:
   - **👁 Mod citire (public)** – merge instant, dar rândurile nu se pot șterge
     (aplicația avertizează explicit).
 - **Trimitere:** email, parolă de aplicație, SMTP (cu ⚡Auto SMTP), subiect +
-  corp cu `{{Companie}}` / `{{Persoana_contact}}`, „la primele N companii”
-  (implicit **30**) și pauză (implicit **10s**).
+  corp cu `{{Prenume}}` / `{{Persoana_contact}}` / `{{Companie}}` / `{{Companie_Titlu}}`,
+  „la primele N companii” (implicit **30**) și pauză (implicit **10s**).
+- **📎 Fișier atașat (CV):** încarci PDF-ul o dată, pleacă automat cu FIECARE
+  email trimis; Dry-Run-ul arată dacă e atașat sau lipsește.
 - **🚀 Pornește / ⏹️ Oprește** – bară de progres + jurnal live; stop-ul e sigur
   (verificat la fiecare secundă, inclusiv în pauze).
 - **Ștergerea din tabel se face IMEDIAT după fiecare email trimis cu succes**,
@@ -54,8 +57,9 @@ Ce face:
 Teste:
 
 ```bash
-.venv-web/bin/python test_web.py     # 65 teste (include conexiune publică REALA la tabelul tău)
-python3 test_app.py                  # 45 teste desktop
+.venv-web/bin/python test_web.py     # 77 teste (include conexiune publică REALA la tabelul tău)
+TK_SILENCE_DEPRECATION=1 /usr/bin/python3 test_app.py   # 45 teste desktop (macOS)
+python3 test_app.py                  # 45 teste desktop (Windows/Linux)
 ```
 
 Mediul virtual `.venv-web/` se creează automat la prima rulare a

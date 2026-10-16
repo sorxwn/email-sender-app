@@ -107,25 +107,32 @@ def test_extract_sheet_id():
 
 
 def test_neutral_fallbacks():
-    """Punctul 2: nicio valoare goala/NaN/None nu ajunge in email."""
-    t = "Buna ziua {{Persoana_contact}}, de la {{Companie}}!"
+    """Punctul 2: nicio valoare goala/NaN/None nu ajunge in email (fallback EN)."""
+    t = "Hello {{Persoana_contact}}, from {{Companie}}! Dear {{Prenume}},"
     cases = [
         ({"Persoana_contact": "", "Companie": "ACME"},
-         "Buna ziua Stimate partener, de la ACME!"),
+         "Hello Sir/Madam, from ACME! Dear Sir/Madam,"),
         ({"Persoana_contact": None, "Companie": "ACME"},
-         "Buna ziua Stimate partener, de la ACME!"),
+         "Hello Sir/Madam, from ACME! Dear Sir/Madam,"),
         ({"Persoana_contact": float("nan"), "Companie": "ACME"},
-         "Buna ziua Stimate partener, de la ACME!"),
+         "Hello Sir/Madam, from ACME! Dear Sir/Madam,"),
         ({"Persoana_contact": "nan", "Companie": "None"},
-         "Buna ziua Stimate partener, de la compania dumneavoastra!"),
+         "Hello Sir/Madam, from your company! Dear Sir/Madam,"),
         ({"Persoana_contact": "N/A", "Companie": "  "},
-         "Buna ziua Stimate partener, de la compania dumneavoastra!"),
-        ({"Persoana_contact": "Ana", "Companie": "ACME"},
-         "Buna ziua Ana, de la ACME!"),
+         "Hello Sir/Madam, from your company! Dear Sir/Madam,"),
+        ({"Persoana_contact": "Arild Jensen", "Companie": "ACME"},
+         "Hello Arild Jensen, from ACME! Dear Arild,"),
     ]
     for row, expected in cases:
         got = email_core.render_template(t, email_core.build_lookup(row))
         check("fallback neutru: {!r}".format(row), got == expected, got)
+
+    # variabile derivate: {{Nume}} si {{Companie_Titlu}}
+    lk = email_core.build_lookup({"Persoana_contact": "Arild Jensen",
+                                  "Companie": "a. jensen as"})
+    check("derivat {{Nume}}", lk.get("Nume") == "Jensen", lk.get("Nume"))
+    check("derivat {{Companie_Titlu}}",
+          lk.get("Companie_Titlu") == "A. Jensen AS", lk.get("Companie_Titlu"))
 
 
 def test_private_key_newline_normalization():
@@ -282,6 +289,77 @@ def test_worker_heartbeat():
     check("fara „ochi” din interfata -> auto-oprire pentru siguranta",
           run._should_stop() and run.stop_event.is_set())
 
+
+def test_attachments():
+    # build_message: PDF atasat corect (base64 + Content-Disposition), body intact
+    pdf = b"%PDF-1.4 fake-cv Eduard Lae"
+    msg = email_core.build_message("eu@ex.ro", "tu@ex.ro", "Subiect", "Corp mesaj",
+                                   attachments=[("CV_Eduard_Lae.pdf", pdf)])
+    parts = msg.get_payload()
+    check("atasament: 2 parti (text + fisier)", len(parts) == 2, len(parts))
+    att = parts[1]
+    check("atasament: header Content-Disposition cu numele fisierului",
+          "attachment" in (att.get("Content-Disposition") or "")
+          and "CV_Eduard_Lae.pdf" in (att.get("Content-Disposition") or ""),
+          att.get("Content-Disposition"))
+    check("atasament: continut PDF intact dupa base64",
+          att.get_payload(decode=True) == pdf)
+    check("atasament: MIME corect pentru PDF",
+          att.get_content_type() == "application/pdf", att.get_content_type())
+    check("atasament: body text neatins",
+          parts[0].get_payload(decode=True).decode("utf-8") == "Corp mesaj")
+    # retrocompatibil: fara atasamente -> o singura parte (ca inainte)
+    msg2 = email_core.build_message("eu@ex.ro", "tu@ex.ro", "S", "B")
+    check("atasament: fara fisier -> structura veche (1 parte)",
+          len(msg2.get_payload()) == 1)
+    # intrari invalide sunt ignorate, nu crapa
+    msg3 = email_core.build_message("eu@ex.ro", "tu@ex.ro", "S", "B",
+                                    attachments=[None, ("", b"x"), ("fara-date", None)])
+    check("atasament: intrari invalide ignorate", len(msg3.get_payload()) == 1)
+    # SendRun: acelasi CV ajunge la FIECARE email trimis (capturam mesajele)
+    import sender_worker as _sw
+    orig_build = email_core.build_message
+    orig_sw_build = _sw.build_message
+    captured = []
+
+    def spy_build(*a, **k):
+        m = orig_build(*a, **k)
+        captured.append(m)
+        return m
+
+    email_core.build_message = spy_build
+    _sw.build_message = spy_build
+    try:
+        FakeSMTP.sent.clear()
+        ws2 = FakeWorksheet(sample_values())
+        model2 = sheet_io.SheetModel(ws2.get_all_values(), writable=True, worksheet=ws2)
+        session2 = email_core.SmtpSession("smtp.test.ro", 587, "eu@ex.ro", "parola-ok")
+        run2 = SendRun(session2, model2, model2.targets(10), "eu@ex.ro",
+                       "Buna {{Companie}}", "Salut!", delay=0,
+                       attachments=[("CV.pdf", pdf)])
+        run2.start()
+        ok2 = wait_finished(run2)
+    finally:
+        email_core.build_message = orig_build
+        _sw.build_message = orig_sw_build
+    check("atasament: fiecare email trimis contine CV-ul",
+          ok2 and len(captured) == 3 and all(len(m.get_payload()) == 2 for m in captured),
+          len(captured) if ok2 else "neterminat")
+    # UI: sectiunea CV prezenta (uploader)
+    try:
+        from streamlit.testing.v1 import AppTest
+        cale = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_app.py")
+        at = AppTest.from_file(cale, default_timeout=40)
+        at.run()
+        ups = [u.label for u in at.file_uploader]
+        check("UI: camp de incarcare CV prezent",
+              any("CV" in (l or "") for l in ups), ups)
+        check("UI: sectiunea „Fișier atașat” prezenta",
+              any("Fișier atașat" in s.value for s in at.subheader),
+              [s.value for s in at.subheader])
+    except Exception as e:
+        print("SKIP UI atasament: {}".format(e))
+
 # =========================================================================== #
 def test_streamlit_ui():
     try:
@@ -387,6 +465,7 @@ def main():
     test_worker_stop()
     test_worker_bad_password()
     test_worker_heartbeat()
+    test_attachments()
     test_streamlit_ui()
 
     total = len(RESULTS)

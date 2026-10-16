@@ -138,6 +138,41 @@ def build_lookup(row):
     for k, v in row.items():
         lookup[str(k).strip()] = v
         lookup[normalize_header(k)] = v
+    # --- variabile derivate automat (nu trebuie coloane noi in tabel) ---
+    # {{Prenume}} = primul cuvant din Persoana_contact ("Arild Jensen" -> "Arild")
+    # {{Nume}} = ultimul cuvant ("Arild Jensen" -> "Jensen")
+    # {{Companie_Titlu}} = compania cu majuscule frumoase ("a. jensen as" -> "A. Jensen AS")
+    persoana = ""
+    for cand in ("persoana_contact", "persoana", "nume_contact", "contact"):
+        if not is_blank_value(lookup.get(cand)):
+            persoana = str(lookup.get(cand)).strip()
+            break
+    if persoana:
+        parti = persoana.split()
+        prenume = parti[0]
+        nume = parti[-1] if len(parti) > 1 else ""
+        for cheie in ("Prenume", "prenume", "FirstName", "first_name", "firstname"):
+            lookup.setdefault(cheie, prenume)
+            lookup.setdefault(normalize_header(cheie), prenume)
+        if nume:
+            for cheie in ("Nume", "nume", "LastName", "last_name", "lastname"):
+                lookup.setdefault(cheie, nume)
+                lookup.setdefault(normalize_header(cheie), nume)
+    comp = ""
+    for cand in ("companie", "firma", "societate", "company"):
+        if not is_blank_value(lookup.get(cand)):
+            comp = str(lookup.get(cand)).strip()
+            break
+    if comp:
+        titlu = " ".join(w[:1].upper() + w[1:] if w else "" for w in comp.split())
+        # abrevieri norvegiene uzuale inapoi cu majuscule: AS, ASA, DA, ANS
+        for abbr in (" As", " Asa", " Da", " Ans"):
+            if titlu.endswith(abbr):
+                titlu = titlu[: -len(abbr)] + " " + abbr.strip().upper()
+        titlu = titlu.replace(" A/S", " A/S")
+        for cheie in ("Companie_Titlu", "companie_titlu", "Firma_Titlu", "Company_Title"):
+            lookup.setdefault(cheie, titlu)
+            lookup.setdefault(normalize_header(cheie), titlu)
     return lookup
 
 
@@ -157,13 +192,23 @@ def is_blank_value(val):
 
 # Text neutru pentru variabilele goale in email (niciodata „nan"/„None"/gol)
 NEUTRAL_FALLBACKS = {
-    "persoana_contact": "Stimate partener",
-    "persoana": "Stimate partener",
-    "nume_contact": "Stimate partener",
-    "contact": "Stimate partener",
-    "companie": "compania dumneavoastra",
-    "firma": "compania dumneavoastra",
-    "societate": "compania dumneavoastra",
+    "persoana_contact": "Sir/Madam",
+    "persoana": "Sir/Madam",
+    "nume_contact": "Sir/Madam",
+    "contact": "Sir/Madam",
+    "prenume": "Sir/Madam",
+    "firstname": "Sir/Madam",
+    "first_name": "Sir/Madam",
+    "nume": "Sir/Madam",
+    "lastname": "Sir/Madam",
+    "last_name": "Sir/Madam",
+    "companie": "your company",
+    "firma": "your company",
+    "societate": "your company",
+    "company": "your company",
+    "companie_titlu": "your company",
+    "firma_titlu": "your company",
+    "company_title": "your company",
 }
 
 
@@ -197,12 +242,56 @@ def find_unknown_vars(*templates):
     return unknown
 
 
-def build_message(sender, recipient, subject, body):
+def _guess_mime(filename):
+    """MIME (maintype, subtype) dupa extensie - pentru atasamente CV."""
+    ext = (os.path.splitext(filename or "")[1] or "").lower()
+    return {
+        ".pdf": ("application", "pdf"),
+        ".doc": ("application", "msword"),
+        ".docx": ("application", "vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        ".odt": ("application", "vnd.oasis.opendocument.text"),
+        ".rtf": ("application", "rtf"),
+        ".txt": ("text", "plain"),
+        ".jpg": ("image", "jpeg"),
+        ".jpeg": ("image", "jpeg"),
+        ".png": ("image", "png"),
+    }.get(ext, ("application", "octet-stream"))
+
+
+def build_message(sender, recipient, subject, body, attachments=None):
+    """Construieste emailul. attachments = lista de (nume_fisier, bytes).
+
+    Retrocompatibil: fara atasamente, structura e ca inainte (o singura
+    parte text), ca sa nu se strice nimic din ce exista deja.
+    """
+    from email import encoders
+    from email.mime.base import MIMEBase
     msg = MIMEMultipart()
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = Header(subject, "utf-8")  # caractere speciale (æøå, șț) corect codate
     msg.attach(MIMEText(body, "plain", "utf-8"))
+    for item in attachments or []:
+        try:
+            if isinstance(item, (tuple, list)):
+                fname, data = item[0], item[1]
+            elif isinstance(item, dict):
+                fname, data = item.get("filename"), item.get("data")
+            else:
+                continue
+            if not fname or data is None:
+                continue
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+            maintype, subtype = _guess_mime(str(fname))
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(bytes(data))
+            encoders.encode_base64(part)
+            safe_name = os.path.basename(str(fname))
+            part.add_header("Content-Disposition", "attachment", filename=safe_name)
+            msg.attach(part)
+        except Exception:
+            continue
     return msg
 
 
