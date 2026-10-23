@@ -267,6 +267,7 @@ with st.sidebar:
 # =========================================================== titlu + sumar ==
 st.title("📧 Trimitere Emailuri Automatizate")
 st.caption("Conectată direct la Google Sheet-ul tău ·100% în română · fără server sau hosting plătit")
+st.success("🆕 Versiunea noua – dacă vezi acest mesaj, deploy-ul a făcut cu succes!")
 
 model = st.session_state.sheet_model
 
