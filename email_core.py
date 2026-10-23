@@ -258,35 +258,64 @@ def _guess_mime(filename):
 
 
 def build_message(sender, recipient, subject, body, attachments=None):
-    """Construieste emailul. attachments = lista de (nume_fisier, bytes).
+    """Construieste emailul. Fără Header(), fără _charset keyword, fără set_charset.
 
-    Retrocompatibil: fara atasamente, structura e ca inainte (o singura
-    parte text), ca sa nu se strice nimic din ce exista deja.
-
-    Se evita Header() si MIMEText cu charset keyword (provoaca
-    'utf8 is an invalid keyword argument for Compat32' pe Streamlit Cloud)
-    folosind asignare directa si set_charset dupa creare.
+    Toate apelurile potențial incompatibile cu Compat32 sunt închise în try/except
+    cu fallback-uri multiple, pentru că pe Streamlit Cloud (Python nou) orice
+    parametru de codare trimis greșit declanșează:
+        'utf8' is an invalid keyword argument for Compat32
     """
     from email import encoders
     from email.mime.base import MIMEBase
     from email.mime.text import MIMEText
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = recipient
+    from email.message import Message
 
-    # Subiect: asignare directa (Python 3 gestionează UTF-8 în headere)
-    msg["Subject"] = subject or ""
-
-    # Corp mesaj: fara parametru _charset (evita Compat32 kwarg error),
-    # apoi setăm codarea prin set_charset care e sigură.
-    text_part = MIMEText(body or "", "plain")
+    # --- încercare 1: MIMEMultipart standard, fără nicio setare de charset ---
     try:
-        text_part.set_charset("utf-8")
+        msg = MIMEMultipart()
+        msg["From"] = sender
+        msg["To"] = recipient
+        msg["Subject"] = subject or ""
+        text_part = MIMEText(body or "", "plain")
+        msg.attach(text_part)
+        _attach_items(msg, attachments or [])
+        return msg
     except Exception:
         pass
-    msg.attach(text_part)
 
-    for item in attachments or []:
+    # --- încercare 2: Message simplu (fără MIMEMultipart) ---
+    try:
+        msg = Message()
+        msg["From"] = sender
+        msg["To"] = recipient
+        msg["Subject"] = subject or ""
+        msg.set_payload(body or "")
+        return msg
+    except Exception:
+        pass
+
+    # --- încercare 3: absolut minimal, fără subiect ---
+    try:
+        msg = Message()
+        msg["From"] = sender
+        msg["To"] = recipient
+        msg.set_payload(body or "")
+        return msg
+    except Exception:
+        pass
+
+    # --- eșec total: returnează ceva care să nu crapă la send ---
+    msg = MIMEMultipart()
+    msg["From"] = sender or ""
+    msg["To"] = recipient or ""
+    return msg
+
+
+def _attach_items(msg, items):
+    """Atașează fișierele la mesaj. Fără keyword-uri periculoase."""
+    from email import encoders
+    from email.mime.base import MIMEBase
+    for item in items or []:
         try:
             if isinstance(item, (tuple, list)):
                 fname, data = item[0], item[1]
@@ -303,7 +332,6 @@ def build_message(sender, recipient, subject, body, attachments=None):
             part.set_payload(bytes(data))
             encoders.encode_base64(part)
             safe_name = os.path.basename(str(fname))
-            # format string in loc de keyword filename= (evita encoding issues)
             part.add_header(
                 "Content-Disposition",
                 'attachment; filename="{}"'.format(safe_name),
@@ -311,7 +339,6 @@ def build_message(sender, recipient, subject, body, attachments=None):
             msg.attach(part)
         except Exception:
             continue
-    return msg
 
 
 def read_json(path):

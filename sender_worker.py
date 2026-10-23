@@ -128,7 +128,19 @@ class SendRun:
                     render_template(self.body, lookup),
                     attachments=self.attachments,
                 )
-                ok, err, code = self.session.send(msg)
+                try:
+                    ok, err, code = self.session.send(msg)
+                except TypeError as e:
+                    # Compat32 / charset keyword error pe Streamlit Cloud
+                    # -> tratam ca eroare pentru acest destinatar, nu oprem totul
+                    self.errors += 1
+                    self._log("err", "❌ Eroare la {}: {}".format(recipient, e))
+                    self.done += 1
+                    if i < self.total and not self._should_stop():
+                        self.status = "Pauză {}s... ({}/{})".format(self.delay, i, self.total)
+                        if not self._sleep(self.delay):
+                            break
+                    continue
                 if not ok and code in TRANSIENT_CODES and not self._should_stop():
                     self._log("warn", "Serverul cere o pauză (cod {}), "
                               "aștept 30s și reîncerc...".format(code))
