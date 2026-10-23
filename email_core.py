@@ -46,7 +46,7 @@ TRANSIENT_CODES = {421, 450, 451, 452, 454}
 
 # Nume de coloane acceptate ca fiind "emailul" destinatarului
 EMAIL_COLUMN_NAMES = {
-    "email", "e_mail", "mail", "email_adresa", "adresa_email",
+    "email", "e-mail", "e_mail", "mail", "email_adresa", "adresa_email",
     "adresa_de_email", "email_address", "adresa_mail", "email_destinatar",
 }
 
@@ -263,14 +263,32 @@ def build_message(sender, recipient, subject, body, attachments=None):
 
     Retrocompatibil: fara atasamente, structura e ca inainte (o singura
     parte text), ca sa nu se strice nimic din ce exista deja.
+
+    Se evita Headers si MIMEText cu charset positional (propice la erori
+    'utf8 is an invalid keyword argument for Compat32' pe Python mai nou
+    / Streamlit Cloud) folosind keyword-uri explicit + fallback sigur.
     """
     from email import encoders
     from email.mime.base import MIMEBase
+    from email.mime.text import MIMEText
     msg = MIMEMultipart()
     msg["From"] = sender
     msg["To"] = recipient
-    msg["Subject"] = Header(subject, "utf-8")  # caractere speciale (æøå, șț) corect codate
-    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    # Subiect: codare UTF-8 sigura pentru caractere speciale (æøå, șț etc.)
+    try:
+        msg["Subject"] = Header(subject or "", "utf-8")
+    except Exception:
+        msg["Subject"] = subject or ""
+
+    # Corp mesaj: keyword _charset explicit (evita trimiterea pozitionala
+    # care pe unele versiuni Python ajunge ca kwarg 'utf8=' la Compat32)
+    try:
+        text_part = MIMEText(body or "", "plain", _charset="utf-8")
+    except TypeError:
+        text_part = MIMEText(body or "", "plain")
+    msg.attach(text_part)
+
     for item in attachments or []:
         try:
             if isinstance(item, (tuple, list)):
