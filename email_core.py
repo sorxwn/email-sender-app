@@ -17,7 +17,6 @@ import re
 import smtplib
 import ssl
 import unicodedata
-from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -264,9 +263,9 @@ def build_message(sender, recipient, subject, body, attachments=None):
     Retrocompatibil: fara atasamente, structura e ca inainte (o singura
     parte text), ca sa nu se strice nimic din ce exista deja.
 
-    Se evita Headers si MIMEText cu charset positional (propice la erori
-    'utf8 is an invalid keyword argument for Compat32' pe Python mai nou
-    / Streamlit Cloud) folosind keyword-uri explicit + fallback sigur.
+    Se evita Header() si MIMEText cu charset keyword (provoaca
+    'utf8 is an invalid keyword argument for Compat32' pe Streamlit Cloud)
+    folosind asignare directa si set_charset dupa creare.
     """
     from email import encoders
     from email.mime.base import MIMEBase
@@ -275,18 +274,16 @@ def build_message(sender, recipient, subject, body, attachments=None):
     msg["From"] = sender
     msg["To"] = recipient
 
-    # Subiect: codare UTF-8 sigura pentru caractere speciale (æøå, șț etc.)
-    try:
-        msg["Subject"] = Header(subject or "", "utf-8")
-    except Exception:
-        msg["Subject"] = subject or ""
+    # Subiect: asignare directa (Python 3 gestionează UTF-8 în headere)
+    msg["Subject"] = subject or ""
 
-    # Corp mesaj: keyword _charset explicit (evita trimiterea pozitionala
-    # care pe unele versiuni Python ajunge ca kwarg 'utf8=' la Compat32)
+    # Corp mesaj: fara parametru _charset (evita Compat32 kwarg error),
+    # apoi setăm codarea prin set_charset care e sigură.
+    text_part = MIMEText(body or "", "plain")
     try:
-        text_part = MIMEText(body or "", "plain", _charset="utf-8")
-    except TypeError:
-        text_part = MIMEText(body or "", "plain")
+        text_part.set_charset("utf-8")
+    except Exception:
+        pass
     msg.attach(text_part)
 
     for item in attachments or []:
@@ -306,7 +303,11 @@ def build_message(sender, recipient, subject, body, attachments=None):
             part.set_payload(bytes(data))
             encoders.encode_base64(part)
             safe_name = os.path.basename(str(fname))
-            part.add_header("Content-Disposition", "attachment", filename=safe_name)
+            # format string in loc de keyword filename= (evita encoding issues)
+            part.add_header(
+                "Content-Disposition",
+                'attachment; filename="{}"'.format(safe_name),
+            )
             msg.attach(part)
         except Exception:
             continue
